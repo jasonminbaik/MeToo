@@ -1,0 +1,88 @@
+
+#pip install pandas
+import pandas as pd
+import lzma
+
+
+df=pd.read_csv("/Users/crystalbaik/GoogleDrive/EconResearch/df.merge2.csv")
+df
+
+data=pd.DataFrame(df)
+data
+data.head()
+tweets=data['text']
+
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.decomposition import LatentDirichletAllocation
+
+#this is a function to print out the top words for each topic in a pretty way.
+#Don't worry too much about understanding every line of this code.
+def print_top_words(model, feature_names, n_top_words):
+    for topic_idx, topic in enumerate(model.components_):
+        print("\nTopic #%d:" % topic_idx)
+        print(" ".join([feature_names[i]
+                        for i in topic.argsort()[:-n_top_words - 1:-1]]))
+    print()
+
+print("Extracting tf features for LDA...")
+tf_vectorizer = CountVectorizer(max_df = 0.80, # ignore terms that appear in more than 80% of documents, ie corpus-specific stopwords
+                                min_df = 50,   # ignore terms that appear in less than 50 of documents, ie remove very rare terms
+                                max_features = 10000, # consider only 10k top words by frequency
+                                stop_words='english' # remove stopwords
+                                )
+
+tf = tf_vectorizer.fit_transform(tweets)
+
+# vizualize the document term matrix
+tf_matrix = tf.todense()
+tf_matrix = pd.DataFrame(tf_matrix)
+tf_matrix
+
+n_samples = len(data)
+n_topics = 5
+n_top_words = 20
+
+print("Fitting LDA models with tf features, "
+      "n_samples=%d and n_topics=%d..."
+      % (n_samples, n_topics))
+
+
+#define the lda function, with desired options
+#Check the documentation, linked above, to look through the options
+lda = LatentDirichletAllocation(n_components = n_topics, # how many topics we want
+                                max_iter = 20, # maximum learning iterations
+                                learning_method = 'online',
+                                learning_offset = 80.,
+                                total_samples = n_samples,
+                                random_state = 0)
+#fit the model
+lda.fit(tf)
+
+
+print("\nTopics in LDA model:")
+tf_feature_names = tf_vectorizer.get_feature_names()
+print_top_words(lda, tf_feature_names, n_top_words)
+
+#not working
+import pyLDAvis
+import pyLDAvis.sklearn
+pyLDAvis.enable_notebook()
+
+lda_display = pyLDAvis.sklearn.prepare(lda,
+                                       tf,
+                                       tf_vectorizer)
+
+pyLDAvis.save_html(lda_display, 'lda_visualization.html')
+# See lda_visualization.html to explore the LDA based topics
+
+lda_display # smaller lambda shows more unique/rare terms for the topic
+
+topic_dist = lda.transform(tf)
+pd.options.display.max_colwidth = 100
+
+topic_dist_df = pd.DataFrame(topic_dist)
+topic_dist_df
+df_w_topics = topic_dist_df.join(data)
+df_w_topics
+df_w_topics.head()
+
