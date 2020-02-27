@@ -1,0 +1,908 @@
+library(rtweet)
+library(httpuv)
+library(dplyr)
+library(tidytext)
+library(stringr)
+library(wordcloud)
+library(forcats)
+library(magrittr)
+library(textdata)
+library(tidyr)
+library(ggplot2)
+library(faraway)
+library(reshape2)
+library(quanteda)
+library(SnowballC)
+
+
+setwd("/Users/Jason/Google Drive/EconResearch/")
+SA_timelines <- readRDS("SA_timelines.rds")
+
+######################################### Bigrams Before SA ######################################### 
+sa<- SA_timelines
+#subsetting the before and after dataset
+sa$date<- substr(sa$created_at,start = 1,stop=10)
+sa.before<-subset(sa, sa$date >= "2017-04-01" & sa$date <= "2017-10-14")
+sa.after<-subset(sa, sa$date >= "2017-10-21" & sa$date <= "2018-03-31")
+
+
+# get all text from before SA data set
+sa.txt.b <- subset(sa.before, select = "text")
+sa.txt.b<- as_tibble(sa.txt.b)
+attach(sa.txt.b)
+
+# get all text from after SA data set
+sa.txt.a <- subset(sa.after, select = "text")
+sa.txt.a<- as_tibble(sa.txt.a)
+attach(sa.txt.a)
+
+
+reg_words <- "([^A-Za-z_\\d#@']|'(?![A-Za-z_\\d#@]))"
+
+# clean data and create bigrams
+bigrams <- sa.txt.b %>%
+  # filter out Retweets (RT)
+  filter(!str_detect(text, "^RT")) %>%
+  filter(substr(text, 1, 1) != '@') %>%
+  #mutate(text = str_replace_all(text, "#", "")) %>%
+  filter(substr(text, 1, 1) != '#') %>%
+  # remove URLs & certain characters that signal something other than natural language txt from tweets
+  mutate(text = str_replace_all(text, "https://t.co/[A-Za-z\\d]+|http://[A-Za-z\\d]+|&amp;|&lt;|&gt;|RT|https", "")) %>%
+  # change all @reference to @person
+  mutate(text = str_replace_all(text, "\\d[:alpha:]|[:digit:]\\w", "")) %>%
+  mutate(text = str_replace_all(text, "[0-9]", "")) %>%
+  unnest_tokens(word, text, token = "ngrams", n=2)
+
+# separate bigrams into 2 & filter out stop words
+bi_edit<- bigrams %>%
+  # separate bigrams 
+  separate(word, c("word1", "word2"), sep=" ") %>%
+  #filter out stock stop words
+  filter(!word1 %in% stop_words$word) %>%
+  filter(!word2 %in% stop_words$word) %>%
+  filter(substr(word1, 1, 1) != '#', # remove hashtags
+         substr(word2, 1, 1) != '#',
+         str_detect(word1, "[a-z]"), # remove words containing only numbers or symbols
+         str_detect(word2, "[a-z]"))
+
+bi_united<-bi_edit %>%
+  unite(bigram,word1,word2, sep=" ")
+
+
+################################## for SA Before dataset ##################################
+# create bigrams into topics
+bi_clean <- bi_united %>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "president trump"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trump administration"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "dear realdonaldtrump"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trump tower"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trump trump"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trump's tweets"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trump supporters"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "hey realdonaldtrump"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trump admin"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "president realdonaldtrump"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "impeach trump"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "president trump's"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trump campaign"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "pres trump"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "donald trump's"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trumps presidency"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trump's presidency"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trump's decision"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "anti trump"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "pres trump's"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "donald trump’s"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "white supremacists"),"white supremacy"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "white supremacist"),"white supremacy"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "neo nazis"),"white supremacy"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "neo nazi"),"white supremacy"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "heather heyer"),"white supremacy"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "heather heyer's"),"white supremacy"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "white nationalist"),"white supremacy"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "white nationalists"),"white supremacy"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "peter cvjetanovic"),"white supremacy"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "nazis white"),"white supremacy"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "confederate statues"),"confederate symbols"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "confederate monuments"),"confederate symbols"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "confederate flag"),"confederate symbols"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "puerto ricans"),"puerto rico"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "puerto rican"),"puerto rico"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "puerto rico's"),"puerto rico"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "las vegas"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "vegas shooter's"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "gun violence"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "mass shooting"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "shooter's gun"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "mass shootings"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "violence victims"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "gun laws"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sandy hook"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "stephen paddock"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "preexisting condition"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "care bill"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "health insurance"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "pre existing"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "healthcare bill"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "gop health"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "preexisting condition"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "existing condition"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "republican health"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "billcassidy grahamcassidy"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "existing conditions"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "health bill"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "care plan"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "affordable care"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "obamacare repeal"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "gop health"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trumpcare bill"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "graham cassidy"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "universal health"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "pre existing"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "paris climate"),"climate change"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "global warming"),"climate change"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "climate accord"),"climate change"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "harvey weinstein"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sexual harassment"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sexual predator"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sexually assaulted"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sexual abuse"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sexual violence"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sexually harassed"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "rape culture"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "harvey weinstein's"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "harvey victims"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "mental illness"),"mental health"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "mentally ill"),"mental health"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "mental illnesses"),"mental health"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trans people"),"transgender topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "transgender people"),"transgender topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "disruption trans"),"transgender topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trans rights"),"transgender topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "transgender americans"),"transgender topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "transgender troops"),"transgender topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "happy pride"),"pride month"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "black lives"),"police brutality"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "police officer"),"police brutality"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "police officers"),"police brutality"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "police violence"),"police brutality"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "police misconduct"),"police brutality"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "control pills"),"birth control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "tax plan"),"tax topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "tax cuts"),"tax topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "tax plan"),"tax topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "tax breaks"),"tax topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "estate tax"),"tax topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "corporate tax"),"tax topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "tax break"),"tax topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "tax reform"),"tax topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "gop tax"),"tax topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "tax returns"),"tax topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trump russia"),"russia probe"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "russia investigation"),"russia probe"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "robert mueller"),"russia probe"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "special prosecutor"),"russia probe"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "special counsel"),"russia probe"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "russia scandal"),"russia probe"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "nfl players"),"nfl protest"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "national anthem"),"nfl protest"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "president obama"),"barack obama"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "media fake"),"fakes news"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "spreading fake"),"fakes news"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "fake media"),"fakes news"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "fake story"),"fakes news"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "fake videos"),"fakes news"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "fakenews morning"),"fakes news"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "north korean"),"north korea"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "north koreans"),"north korea"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "north korea's"),"north korea"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "qotd unitenotuntie"),"womens conference"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "unitenotuntie flylikeanigl"),"womens conference"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "aboutwomen unitenotuntie"),"womens conference"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "pizzeriaserio unitenotuntie"),"womens conference"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "muslim ban"),"travel ban"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "paul ryan"),"republican party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "mitch mcconnell"),"republican party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "ted cruz"),"republican party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "gop senators"),"republican party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "senate gop"),"republican party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "gop insists"),"republican party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "gop senator"),"republican party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "control gop"),"republican party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "republican senator"),"republican party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sen billcassidy"),"republican party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "jared kushner"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "jeff sessions"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "mike pence"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "steve bannon"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "ivanka trump"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "tom price"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "anthony scaramucci"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "betsy devos"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sarah huckabee"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "huckabee sanders"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "vice president"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "john kelly"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "stephen miller"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "communications director"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "kellyanne conway"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "press secretary"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "ag sessions"),"white house"))
+
+
+#counting the frequency of the bigrams for overall dataset
+bi_final <- bi_clean %>%
+  count(bigram, sort=T)
+View(bi_final)
+
+######################################### Bigrams After SA ######################################### 
+reg_words <- "([^A-Za-z_\\d#@']|'(?![A-Za-z_\\d#@]))"
+
+bigrams.a <- sa.txt.a %>%
+  # filter out Retweets (RT)
+  filter(!str_detect(text, "^RT")) %>%
+  filter(substr(text, 1, 1) != '@') %>%
+  #mutate(text = str_replace_all(text, "#", "")) %>%
+  filter(substr(text, 1, 1) != '#') %>%
+  # remove URLs & certain characters that signal something other than natural language txt from tweets
+  mutate(text = str_replace_all(text, "https://t.co/[A-Za-z\\d]+|http://[A-Za-z\\d]+|&amp;|&lt;|&gt;|RT|https", "")) %>%
+  # change all @reference to @person
+  mutate(text = str_replace_all(text, "\\d[:alpha:]|[:digit:]\\w", "")) %>%
+  mutate(text = str_replace_all(text, "[0-9]", "")) %>%
+  unnest_tokens(word, text, token = "ngrams", n=2)
+
+#View(bigrams.a)
+
+# separate bigrams into 2 & filter out stop words
+bi_edit.a<- bigrams.a %>%
+  # separate bigrams 
+  separate(word, c("word1", "word2"), sep=" ") %>%
+  #filter out stock stop words
+  filter(!word1 %in% stop_words$word) %>%
+  filter(!word2 %in% stop_words$word) %>%
+  filter(substr(word1, 1, 1) != '#', # remove hashtags
+         substr(word2, 1, 1) != '#',
+         str_detect(word1, "[a-z]"), # remove words containing only numbers or symbols
+         str_detect(word2, "[a-z]"))
+
+
+bi_united.a<-bi_edit.a %>%
+  unite(bigram,word1,word2, sep=" ")
+
+
+# for SA After dataset, create topics w/bigrams
+bi_clean.a <- bi_united.a %>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "wpmoychallenge ngata"),"ngata wpmoychallenge"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "ngata v_ngata"),"ngata wpmoychallenge"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "president trump"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "american president"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trump administration"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "dear realdonaldtrump"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "country donald"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trump apparently"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trump campaign"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "oval office"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "shutdown trump"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "hey realdonaldtrump"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "donald trump's"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "president trump's"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trump admin"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "impeach trump"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "anti trump"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trumpisguilty trumpisguilty"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "running trump"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sexually assaulting"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sexually assault"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sexually assaulted"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sexual violence"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sexual harassment"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sexually harassed"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sexual abuse"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sex abuse"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sexually abused"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sexual predator"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sexual predators"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "assault allegations"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sexual misconduct"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "metoo movement"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "harvey weinstein"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "weinstein lost"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "kevin spacey"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "larry nassar"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "matt lauer"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "al franken"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "roy moore"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "metoo timesup"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "roy moore’s"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "mark halperin"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "louis ck"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "lauer lost"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "spacey lost"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "rape culture"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "alleged sexual"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "tax bill"),"tax topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "tax cuts"),"tax topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "tax plan"),"tax topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "tax cut"),"tax topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "gop tax"),"tax topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "republican tax"),"tax topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "tax reform"),"tax topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "tax breaks"),"tax topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "tax returns"),"tax topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "tax break"),"tax topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "tax scam"),"tax topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "tax code"),"tax topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "mental illness"),"mental health"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "mentally ill"),"mental health"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "health issues"),"mental health"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "mental illnesses"),"mental health"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "mental illnesses"),"mental health"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "gun laws"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "gun safety"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "gun reform"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "gun lobby"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sense gun"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "gun violence"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "school shooting"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "school shootings"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "arm teachers"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "arming teachers"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "mass shooting"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "mass shooters"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "mass shootings"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "background check"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "universal background"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "background checks"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "assault rifles"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "assault rifle"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "assault weapons"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sandy hook"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "marjory stoneman"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sutherland springs"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "stoneman douglas"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "texas church"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "parkland shooting"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "parkland florida"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "florida shooting"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "parkland students"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "parkland school"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "shooting survivor"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "church shooter"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "active shooter"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "neveragain marchforourlives"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "guncontrolnow neveragain"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "emma gonzalez"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "david hogg"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "anti gun"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "joaquin oliver"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "concealed carry"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "stricter gun"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "control gun"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "common sense"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "health insurance"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "health coverage"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "universal healthcare"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "universal health"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "affordable healthcare"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "national security"),"russia probe"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "robert mueller"),"russia probe"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "special counsel"),"russia probe"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "devin nunes"),"russia probe"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "andrew mccabe"),"russia probe"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "russia investigation"),"russia probe"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "judiciary committee"),"russia probe"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trump russia"),"russia probe"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "house intelligence"),"russia probe"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "house intel"),"russia probe"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "intelligence committee"),"russia probe"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "white supremacist"),"white supremacy"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "white nationalist"),"white supremacy"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "white supremacists"),"white supremacy"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "gamerztruck gamerz"),"gametruck gamerztruck"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "unitenotuntie collabherate"),"womens conference"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "unitenotuntie flylikeanigl"),"womens conference"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "yfc unitenotuntie"),"womens conference"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "flylikeanigl aboutwomen"),"womens conference"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "qotd unitenotuntie"),"womens conference"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "aboutwomen unitenotuntie"),"womens conference"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "day aboutwomen"),"womens conference"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "powherful unitenotuntie"),"womens conference"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "puerto ricans"),"puerto rico"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "puerto rican"),"puerto rico"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "puerto rico's"),"puerto rico"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "president obama"),"barack obama"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "president obama's"),"barack obama"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "obama administration"),"barack obama"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "obama's ban"),"barack obama"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "obama era"),"barack obama"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "dr king"),"martinluther kingjr"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "king jr"),"martinluther kingjr"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "doug jones"),"republican party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "paul ryan"),"republican party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "marco rubio"),"republican party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "mitch mcconnell"),"republican party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "ted cruz"),"republican party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "gop senators"),"republican party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "john mccain"),"republican party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "jeff flake"),"republican party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "republicans rejected"),"republican party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "republican lawmakers"),"republican party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "senate gop"),"republican party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "house gop"),"republican party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "susan collins"),"republican party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "nancy pelosi"),"democratic party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "conor lamb"),"democratic party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "congress moore"),"democratic party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "danica roem"),"democratic party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "nancy pelosi"),"democratic party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "joe biden"),"democratic party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "bernie sanders"),"democratic party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "bill clinton"),"democratic party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "hillary clinton"),"democratic party"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "jeff sessions"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "steve bannon"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "mike pence"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "betsy devos"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "john kelly"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "jared kushner"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "hope hicks"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sarah huckabee"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "huckabee sanders"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "rex tillerson"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "ivanka trump"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "paul manafort"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sam nunberg"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "ben carson"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "rob porter"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sarah sanders"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "kellyanne conway"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "carter page"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "john bolton"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "michael flynn"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "stephen miller"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trans women"),"transgender topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trans woman"),"transgender topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "anti trans"),"transgender topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "women trans"),"transgender topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trans people"),"transgender topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trans bathroom"),"transgender topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trans person"),"transgender topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "transgender people"),"transgender topics"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "diversity transgender"),"transgender topics"))
+
+################################## Histogram for SA Before & After comparison dataset ##################################
+
+Dataset <- as.factor(rep(c("Before SA", "After SA"), 10))
+Dataset <- factor(Dataset, c("Before SA", "After SA"))
+Topics <- factor(rep(c("health care", "donald trump", "white house", "sexual assault",
+                       "puerto rico", "gun control","happy birthday", "republican party",
+                       "mental health", "tax topics"), each = 2))
+Proportion <- c(1528/8830, 349/14450,
+  1277/8830, 1424/14450,
+  1169/8830, 1215/14450,
+  455/8830, 2021/14450,
+  692/8830, 352/14450,
+  606/8830, 3075/14450,
+  325/8830, 298/14450,
+  321/8830, 674/14450,
+  248/8830, 472/14450,
+  210/8830, 1055/14450)
+comp<- data.frame(Dataset, Topics, Proportion)
+
+
+library(ggplot2)
+ggplot(comp, aes(Topics, Proportion, fill = Dataset)) + 
+  geom_bar(stat="identity", position = "dodge") +
+  geom_text(aes(label=round(Proportion, 2)), vjust=1.6, color="white",
+            position = position_dodge(0.9), size=3.5)+ 
+  scale_fill_brewer(palette = "Set1")+
+  ggtitle("Sexual Assault Dataset: Before vs. After Topics [Total Count: 8830, 14450]")
+  
+################################## Histogram for RS Before & After comparison dataset ##################################
+
+
+Dataset <- as.factor(rep(c("Before RS", "After RS"), 10))
+Dataset <- factor(Dataset, c("Before RS", "After RS"))
+Topics <- factor(rep(c("health care", "donald trump", "white house", "sexual assault",
+                       "puerto rico", "gun control","happy birthday", "republican party",
+                       "mental health", "tax topics"), each = 2))
+
+Proportion <- c(41/799, 9/1152,
+                92/799, 56/963,
+                44/799, 43/963,
+                24/799, 42/963,
+                52/799, 15/963,
+                90/799, 184/963,
+                196/799, 155/963,
+                0/799, 0/963,
+                17/799, 36/963,
+                0/799, 29/963)
+comp<- data.frame(Dataset, Topics, Proportion)
+
+library(ggplot2)
+ggplot(comp, aes(Topics, Proportion, fill = Dataset)) + 
+  geom_bar(stat="identity", position = "dodge") + 
+  geom_text(aes(label=round(Proportion,2)), vjust=1.6, color="black",
+            position = position_dodge(0.9), size=3.5)+ 
+  scale_fill_brewer(palette = "Set1")+
+  ggtitle("Random Sample Dataset: Before vs. After Topics [Total Count: 799, 963]")
+
+
+################################## Histogram for SA Before dataset ##################################
+
+Dataset <- as.factor(rep(c("Before SA"), 10))
+Topics <- factor(rep(c("health care", "donald trump", "white house", "sexual assault",
+                       "puerto rico", "gun control","happy birthday", "republican party",
+                       "mental health", "tax topics"), each = 1))
+Proportion <- c(1528/8830,
+                1277/8830, 
+                1169/8830, 
+                455/8830, 
+                692/8830,
+                606/8830, 
+                325/8830, 
+                321/8830, 
+                248/8830,
+                210/8830)
+comp<- data.frame(Dataset, Topics, Proportion)
+
+
+library(ggplot2)
+ggplot(comp, aes(Topics, Proportion, fill = Dataset)) + 
+  geom_bar(stat="identity", position = "dodge") +
+  geom_text(aes(label=round(Proportion, 2)), vjust=1.6, color="white",
+            position = position_dodge(0.9), size=3.5)+ 
+  scale_fill_brewer(palette = "Pastel1")+
+  ggtitle("Before Sexual Assault Dataset: Top 10 Topics [Total Count: 8830]")
+
+
+
+######################################### Random Sample Dataset ######################################### 
+# new random sample
+#Rand_timelines <- readRDS("RS_timelines.rds")
+
+Rand_timelines <- readRDS("RS_timelines_28Jan2020.rds")
+ransam <- Rand_timelines
+
+#subsetting the before and after dataset
+ransam$date<- substr(ransam$created_at,start = 1,stop=10)
+ransam.before<-subset(ransam, ransam$date >= "2017-04-01" & ransam$date <= "2017-10-14")
+ransam.after<-subset(ransam, ransam$date >= "2017-10-21" & ransam$date <= "2018-03-31")
+
+
+# get all text from before SA data set
+ransam.txt.b <- subset(ransam.before, select = "text")
+ransam.txt.b<- as_tibble(ransam.txt.b)
+attach(ransam.txt.b)
+
+# get all text from after SA data set
+ransam.txt.a <- subset(ransam.after, select = "text")
+ransam.txt.a<- as_tibble(ransam.txt.a)
+attach(ransam.txt.a)
+
+
+#########################################  Before Random Sampling #########################################  
+
+reg_words <- "([^A-Za-z_\\d#@']|'(?![A-Za-z_\\d#@]))"
+
+# Clean tweets & create bigrams
+bigrams.rs <- ransam.txt.b %>%
+  # filter out Retweets (RT)
+  filter(!str_detect(text, "^RT")) %>%
+  filter(substr(text, 1, 1) != '@') %>%
+  #mutate(text = str_replace_all(text, "#", "")) %>%
+  filter(substr(text, 1, 1) != '#') %>%
+  # remove URLs & certain characters that signal something other than natural language txt from tweets
+  mutate(text = str_replace_all(text, "https://t.co/[A-Za-z\\d]+|http://[A-Za-z\\d]+|&amp;|&lt;|&gt;|RT|https", "")) %>%
+  # change all @reference to @person
+  mutate(text = str_replace_all(text, "\\d[:alpha:]|[:digit:]\\w", "")) %>%
+  mutate(text = str_replace_all(text, "[0-9]", "")) %>%
+  unnest_tokens(word, text, token = "ngrams", n=2)
+
+# separate bigrams into 2 & filter out stop words
+bi_edit.rs<- bigrams.rs %>%
+  # separate bigrams 
+  separate(word, c("word1", "word2"), sep=" ") %>%
+  #filter out stock stop words
+  filter(!word1 %in% stop_words$word) %>%
+  filter(!word2 %in% stop_words$word) %>%
+  filter(substr(word1, 1, 1) != '#', # remove hashtags
+         substr(word2, 1, 1) != '#',
+         str_detect(word1, "[a-z]"), # remove words containing only numbers or symbols
+         str_detect(word2, "[a-z]"))
+
+
+bi_united.rs <-bi_edit.rs %>%
+  unite(bigram,word1,word2, sep=" ")
+
+bi_united.rs <- bi_united.rs %>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "president trump"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "trump supporters"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "las vegas"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "active shooter"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "vegas shooting"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "gun violence"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sean spicer"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "care bill"),"health care"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "harvey weinstein"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "white supremacist"),"white supremacy"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "white supremacists"),"white supremacy"))
+
+pre.rs <- bi_united.rs %>%
+  count(bigram, sort=T)
+View(pre.rs)
+
+################################## Random Sample Before Top 10 histograms ############################################################### 
+
+
+Dataset <- as.factor(rep(c("RS Dataset"), 10))
+Topics <- factor(c("happy birthday","smule singkaraoke","donald trump","gun control","automatically checked","puerto rico","social media","soccer delhs",
+                   "varsity soccer","video highlights"))
+
+Proportion <- c(196/799,
+                118/799, 
+                92/799, 
+                90/799, 
+                54/799,
+                52/799, 
+                50/799, 
+                49/799,
+                49/799, 
+                49/799)
+comp<- data.frame(Dataset, Topics, Proportion)
+
+library(ggplot2)
+ggplot(comp, aes(Topics, Proportion, fill = Dataset)) + 
+  geom_bar(stat="identity", position = "dodge") + 
+  geom_text(aes(label=round(Proportion,2)), vjust=1.6, color="black",
+            position = position_dodge(0.9), size=3.5)+ 
+  scale_fill_brewer(palette = "Set2")+
+  ggtitle("Before Random Sample Dataset: Top 10 Topics [Total Count = 799]")
+
+################################## Random Sample After Top 10 histograms ############################################################### 
+
+
+Dataset <- as.factor(rep(c("RS Dataset"), 10))
+Topics <- factor(c("gun control","happy birthday","can't wait","playstation psive","automatically checked","social media",
+                   "north korea","donald trump","hops hops","psive uncharted"))
+
+Proportion <- c(184/963,
+                155/963, 
+                119/963, 
+                97/963, 
+                91/963,
+                88/963, 
+                64/963, 
+                56/963,
+                55/963, 
+                54/963)
+comp<- data.frame(Dataset, Topics, Proportion)
+
+library(ggplot2)
+ggplot(comp, aes(Topics, Proportion, fill = Dataset)) + 
+  geom_bar(stat="identity", position = "dodge") + 
+  geom_text(aes(label=round(Proportion,2)), vjust=1.6, color="black",
+            position = position_dodge(0.9), size=3.5)+ 
+  scale_fill_brewer(palette = "Set2")+
+  ggtitle("After Random Sample Dataset: Top 10 Topics [Total Count = 963]")
+
+
+################################## individual SA histograms ############################################################## 
+Dataset <- as.factor(rep(c("Top 10 Before SA"), 10))
+Topics <- factor(c("health care", "donald trump", "white house", "white supremacy", "puerto rico", "gun control", 
+  "sexual assault", "race issues", "happy birthday", "republican party"))
+
+Proportion <- c(1528/7668,
+                1277/7668, 
+                1169/7668, 
+                910/7668, 
+                692/7668, 
+                606/7668, 
+                455/7668, 
+                385/7668, 
+                325/7668,
+                321/7668)
+
+
+comp<- data.frame(Dataset, Topics, Proportion)
+
+library(ggplot2)
+ggplot(comp, aes(Topics, Proportion, fill = Dataset)) + 
+  geom_bar(stat="identity", position = "dodge") + 
+  geom_text(aes(label=round(Proportion,2)), vjust=1.6, color="white",
+            position = position_dodge(0.9), size=3.5)+ 
+  scale_fill_brewer(palette = "Set1")
+
+
+Dataset <- as.factor(rep(c("Top 10 After SA"), 10))
+Topics <- factor(c("gun control", "ngata wpmoychallenge", "sexual assault", "donald trump", "white house", "tax topics", "republican party",
+                   "russia probe", "mental health", "puerto rico"))
+
+Proportion <- c(3075/12890,
+                2036/12890,
+                2021/12890,
+                1424/12890,
+                1215/12890, 
+                1055/12890,
+                674/12890,
+                566/12890,
+                472/12890,
+                352/12890)
+comp<- data.frame(Dataset, Topics, Proportion)
+ggplot(comp, aes(Topics, Proportion, fill = Dataset)) + 
+  geom_bar(stat="identity", position = "dodge") + 
+  geom_text(aes(label=round(Proportion,2)), vjust=1.6, color="white",
+            position = position_dodge(0.9), size=3.5)+ 
+  scale_fill_brewer(palette = "Set1")
+
+################################# histograms of SA Bigrams top 10 in both SA and RS ###################################
+
+
+Dataset <- as.factor(rep(c("Top 10 \
+Before RS\
+dataset"), 10))
+Topics <- factor(c("happy birthday", "smule singkaraoke", "donald trump", "gun control", "automatically checked",
+                   "puerto rico", "social media", "soccer delhs", "varsity soccer", "video highlights"))
+#Proportion <- c(196/799,118/799, 92/799, 90/799,54/799,52/799,50/799, 49/799, 49/799, 49/799)
+
+Count <- c(196, 118, 92, 90, 54, 52, 50, 49, 49, 49)
+
+comp<- data.frame(Dataset, Topics, Count)
+library(ggplot2)
+ggplot(comp, aes(Topics, Count, fill = Dataset)) + 
+  geom_bar(stat="identity", position = "dodge") + 
+  geom_text(aes(label=round(Count,2)), vjust=1.6, color="white",
+            position = position_dodge(0.9), size=3.5)+ 
+  scale_fill_brewer(palette = "Set1") +
+  ylim(0,200)
+
+
+Dataset <- as.factor(rep(c("Top 10 \
+After RS\
+dataset"), 10))
+Topics <- factor(c("gun control", "happy birthday", "can't wait", "playstation psive", "automatically checked", "social media",
+                   "north korea", "donald trump", "hops hops", "psive uncharted"))
+#Proportion <- c(155/815,  119/815,97/815,91/815,88/815,64/815,55/815,54/815,49/815,43/815)
+Count <- c(184, 155, 119, 97, 91, 88, 64, 56, 55, 54)
+comp<- data.frame(Dataset, Topics, Count)
+
+
+library(ggplot2)
+ggplot(comp, aes(Topics, Count, fill = Dataset)) + 
+  geom_bar(stat="identity", position = "dodge") + 
+  geom_text(aes(label=round(Count,2)), vjust=1.6, color="white",
+            position = position_dodge(0.9), size=3.5)+ 
+  scale_fill_brewer(palette = "Set1")+
+  ylim(0,200)
+
+
+
+Dataset <- as.factor(rep(c("Top 10 Terms \
+selected from \
+the Before SA \
+dataset within\
+the Before RS \
+dataset"), 10))
+Topics <- c("health care", "donald trump", "white house", "sexual assault",
+                       "puerto rico", "gun control","happy birthday", "republican party",
+                       "mental health", "tax topics")
+#Proportion <- c(8/414,36/414,  28/414, 0/414, 27/414, 40/414, 244/414,  0/414,31/414, 0/414)
+Count <- c(41, 92, 44, 24, 52, 90, 196, 0, 17, 0)
+comp<- data.frame(Dataset, Topics, Count)
+
+library(ggplot2)
+ggplot(comp, aes(Topics, Count, fill = Dataset)) + 
+  geom_bar(stat="identity", position = "dodge") + 
+  geom_text(aes(label=round(Count,2)), vjust=1.6, color="white",
+            position = position_dodge(0.9), size=3.5)+ 
+  scale_fill_brewer(palette = "Set1")+
+  ylim(0,200)
+
+
+Dataset <- as.factor(rep(c("Top 10 Terms \
+selected from \
+the After SA \
+dataset within\
+the Before RS \
+dataset"), 10))
+Topics <- c("health care", "donald trump", "white house", "sexual assault",
+            "puerto rico", "gun control","happy birthday", "republican party",
+            "mental health", "tax topics")
+# Proportion <- c(0/1152,308/1152,30/1152,102/1152,9/1152,216/1152,223/1152,87/1152,83/1152,94/1152)
+Count <- c(0, 56, 43, 42, 15, 184, 155, 0, 36, 23)
+comp<- data.frame(Dataset, Topics, Count)
+
+library(ggplot2)
+ggplot(comp, aes(Topics, Count, fill = Dataset)) + 
+  geom_bar(stat="identity", position = "dodge") + 
+  geom_text(aes(label=round(Count,2)), vjust=1.6, color="white",
+            position = position_dodge(0.9), size=3.5)+ 
+  scale_fill_brewer(palette = "Set1") +
+  ylim(0,200)
+
+
+######################################### After Random Sampling #########################################  
+
+# Clean tweets & create bigrams
+bigrams.rs.a <- ransam.txt.a %>%
+  # filter out Retweets (RT)
+  filter(!str_detect(text, "^RT")) %>%
+  filter(substr(text, 1, 1) != '@') %>%
+  #mutate(text = str_replace_all(text, "#", "")) %>%
+  filter(substr(text, 1, 1) != '#') %>%
+  # remove URLs & certain characters that signal something other than natural language txt from tweets
+  mutate(text = str_replace_all(text, "https://t.co/[A-Za-z\\d]+|http://[A-Za-z\\d]+|&amp;|&lt;|&gt;|RT|https", "")) %>%
+  # change all @reference to @person
+  mutate(text = str_replace_all(text, "\\d[:alpha:]|[:digit:]\\w", "")) %>%
+  mutate(text = str_replace_all(text, "[0-9]", "")) %>%
+  unnest_tokens(word, text, token = "ngrams", n=2)
+
+# separate bigrams into 2 & filter out stop words
+bi_edit.rs.a<- bigrams.rs.a %>%
+  # separate bigrams 
+  separate(word, c("word1", "word2"), sep=" ") %>%
+  #filter out stock stop words
+  filter(!word1 %in% stop_words$word) %>%
+  filter(!word2 %in% stop_words$word) %>%
+  filter(substr(word1, 1, 1) != '#', # remove hashtags
+         substr(word2, 1, 1) != '#',
+         str_detect(word1, "[a-z]"), # remove words containing only numbers or symbols
+         str_detect(word2, "[a-z]"))
+
+#View(bi_edit.a)
+
+bi_united.rs.a<-bi_edit.rs.a %>%
+  unite(bigram,word1,word2, sep=" ")
+
+bi_united.rs.a <- bi_united.rs.a %>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "president trump"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "breaking trump"),"donald trump"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "vice president"),"white house"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "school shooting"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "gun violence"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "las vegas"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "stoneman douglas"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "marjory stoneman"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sandy hook"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "school shooter"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "gun laws"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "mass shootings"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "mass shooting"),"gun control"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "mental illness"),"mental health"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "matt lauer"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "harvey weinstein"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sexual abuse"),"sexual assault"))%>%
+  mutate(bigram = replace(bigram, str_detect(bigram, "sexual harassment"),"sexual assault"))
+
+
+pre.rs.a <- bi_united.rs.a %>%
+  count(bigram, sort=T)
+View(pre.rs.a)
+
+
+######################################### Comparison Boxplots for Random Sample ######################################### 
+Dataset <- as.factor(rep(c("Before RS", "After RS"), 10))
+Dataset <- factor(Dataset, c("Before RS", "After RS"))
+Topics <- factor(rep(c("health care", "donald trump", "white house", "sexual assault",
+                       "puerto rico", "gun control","happy birthday", "republican party",
+                       "mental health", "tax topics"), each = 2))
+Proportion <- c(41/524, 9/395,
+                92/524, 32/395,
+                12/524, 36/395,
+                24/524, 25/395,
+                52/524, 15/395,
+                90/524, 68/395,
+                196/524, 155/395,
+                0/524, 0/395,
+                17/524, 32/395,
+                0/524, 23/395)
+comp<- data.frame(Dataset, Topics, Proportion)
+
+
+
+
+
+
+
+
+
